@@ -1,12 +1,14 @@
+loki:
+  serviceName: loki
+  servicePort: 3100
+
 config:
-  outputs: |
-    [OUTPUT]
-        Name loki
-        Match *
-        Host loki.monitoring.svc.cluster.local
-        Port 3100
-        Labels job=fluent-bit, namespace=$kubernetes['namespace_name'], pod=$kubernetes['pod_name']
-        Auto_Kubernetes_Labels off
+  labelMap:
+    kubernetes:
+      namespace_name: namespace
+      pod_name: pod
+      container_name: container
+    stream: stream
 
 resources:
   requests:
