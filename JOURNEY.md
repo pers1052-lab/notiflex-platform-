@@ -18,7 +18,7 @@
 | ch3 | 3.5 CI-CD 연결 | ✅ | 2026-04-30 | 2026-09-18 `ci.yaml`의 매니페스트 갱신 방식을 sed→yq로 전환 (구 프로젝트 ID 잔존 버그 수정). 엔드투엔드 테스트 완료: 코드 push→CI 빌드→매니페스트 갱신→ArgoCD 감지(커밋 a800b5e)까지 전부 자동 확인. 단 Rollout 실배포는 CRD 부재로 아직 불가(ch5.3 필요) — 아래 트러블슈팅 참고 |
 | ch4 | 4.2 메트릭 모니터링 | ✅ | 2026-04-30 | 2026-09-18 클러스터 재구축 후 kube-prometheus-stack 재설치 (Prometheus/Grafana/Alertmanager 등 7 Pod 전부 Running, Pending 없음). Prometheus 타겟 16/18 up(coredns 2개만 down, GKE 환경 특성상 무해) |
 | ch4 | 4.3 로그 수집 | ✅ | 2026-04-30 | 2026-09-18 Loki+Fluent Bit 재설치. Grafana Loki 데이터소스 오등록, Fluent Bit output 설정 오류 2건 발견/수정 — 아래 트러블슈팅 참고 |
-| ch4 | 4.4 알림 | ✅ | 2026-04-30 | 2026-09-18 클러스터 재구축 후 `k8s/monitoring/pod-restart-alert.yaml`(기존 파일) 재적용. busybox 이미지로 실제 CrashLoopBackOff 유발해 `inactive→pending→firing` 전이 및 Alertmanager 수신(`PodRestartTooMany` active)까지 엔드투엔드 검증 완료. 테스트 후 v0.1.1로 이미지 복원 |
+| ch4 | 4.4 알림 | ✅ | 2026-04-30 | 2026-09-18 클러스터 재구축 후 `k8s/monitoring/pod-restart-alert.yaml`(기존 파일) 재적용. busybox 이미지로 실제 CrashLoopBackOff 유발해 `inactive→pending→firing` 전이 및 Alertmanager 수신(`PodRestartTooMany` active)까지 엔드투엔드 검증 완료. 테스트 후 v0.1.1로 이미지 복원. 이어서 Slack Incoming Webhook 연동 완료 — 아래 도구 선택 기록/트러블슈팅 참고 |
 | ch5 | 5.2 트래픽 관리 | ✅ | 2026-04-30 | |
 | ch5 | 5.3 무중단 배포 | ✅ | 2026-04-30 | |
 | ch5 | 5.4 ADR 기록 | ✅ | 2026-04-30 | |
@@ -58,6 +58,7 @@
 | 멀티앱 관리 (ch7.3) | App of Apps (argocd/apps/ 디렉터리) | ApplicationSet, 개별 Application | 파일 추가만으로 앱 등록, Sync Wave 순서 보장 |
 | 멀티테넌시 (ch7.4) | Namespace 분리 + per-tenant Rollout | 단일 namespace + 라벨 격리, vCluster | 강한 격리, ArgoCD App of Apps와 자연 결합, 테넌트별 독립 배포 |
 | 배치 자동화 (ch8.3) | K8s CronJob | 외부 cron + 쿠버네티스 외부 트리거, Argo Workflows | 쿠버네티스 네이티브, ops-pool 배치, ArgoCD가 매니페스트로 관리 |
+| 알림 채널 (ch4.4) | Slack Incoming Webhook | 이메일(Gmail SMTP), 카카오톡(나에게 보내기 API), Webhook 범용 | 설정 절차 최소(Webhook URL 하나), 이메일 대비 앱 비밀번호/SMTP 설정 불필요, 카카오톡 대비 토큰 갱신·브리지 서버 불필요 |
 
 ## 현재 버전
 
@@ -97,3 +98,4 @@
 | 2026-09-18 | Grafana에서 Loki 데이터소스 조회 시 "non-json... <!DOCTYPE html>" 에러 — 사용자가 UI에서 직접 만든 Loki 데이터소스(uid 자동생성)의 URL이 잘못 설정됨 | `k8s/monitoring/loki-datasource.yaml`(ConfigMap, `grafana_datasource: "1"` 라벨)로 올바른 URL(`http://loki.monitoring.svc.cluster.local:3100`, uid=loki)의 데이터소스를 프로비저닝. 사이드카의 자동 reload API 호출이 401로 실패해(아래 항목 참고) Grafana Deployment를 `rollout restart`로 재기동해 확실히 반영 |
 | 2026-09-18 | Grafana(v13.2.2-distroless) API에 대한 HTTP Basic Auth가 관리자 계정(`admin`/`admin`, 시크릿 값과 동일)으로도 계속 401 실패 — `curl -u`뿐 아니라 grafana-sc-datasources 사이드카의 reload 호출도 동일하게 401. 반면 브라우저 세션 로그인은 정상 동작 | 원인 미확정(이 Grafana 버전에서 API Basic Auth가 브라우저 세션 로그인과 다르게 동작하는 것으로 추정). 실무 영향: 사이드카의 datasource 자동 reload가 안 먹히므로, 데이터소스/대시보드 ConfigMap을 추가할 때마다 `kubectl rollout restart deployment kube-prometheus-grafana -n monitoring`으로 수동 재기동 필요 |
 | 2026-09-18 | Fluent Bit 로그가 Loki에 전혀 도달하지 않음 (namespace 라벨 목록에 notiflex 없음) | `helm-values/fluent-bit.yaml`이 `config.outputs`(raw 텍스트) 방식으로 작성돼 있었는데, 실제 사용 중인 `grafana/fluent-bit`(deprecated) 차트는 이 키를 지원하지 않고 `loki.serviceName`/`config.labelMap`으로 설정해야 함. 미설정 시 기본값 `${RELEASE}-loki`(=`fluent-bit-loki`, 존재하지 않는 서비스)로 렌더링되어 전송 실패. `loki.serviceName: loki` + `config.labelMap`으로 수정 후 `helm upgrade`, Pod 재시작 후 `{namespace="notiflex"}` 쿼리로 실제 로그 수신 확인 완료 |
+| 2026-09-18 | Slack Incoming Webhook URL을 Alertmanager에 연결하되, git에 평문으로 남기지 않아야 함 | Webhook URL은 `kubectl create secret generic alertmanager-slack-webhook -n monitoring --from-literal=url=...`로 클러스터에만 저장(git 미포함). `helm-values/kube-prometheus.yaml`에는 `alertmanager.alertmanagerSpec.secrets`로 마운트 경로만 지정하고, `slack_configs.api_url_file`로 파일 참조 — URL 값 자체는 어떤 git 파일에도 없음. 클러스터 재구축 시 이 Secret만 다시 만들면 됨 |
