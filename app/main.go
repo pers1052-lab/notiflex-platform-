@@ -120,7 +120,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	_, span := tracer.Start(r.Context(), "health")
 	defer span.End()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "v0.3.1"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "v0.3.2"})
 }
 
 func idHandler(w http.ResponseWriter, r *http.Request) {
