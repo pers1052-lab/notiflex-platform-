@@ -14,8 +14,7 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: notiflex
-  # NOTE: automated sync temporarily disabled — k8s/smb/rollout.yaml requires
-  # api-pool(ch7.2)/Kafka(ch8.1)/Tempo(ch8.2) that don't exist yet on the
-  # rebuilt cluster. selfHeal was reverting the scratch Rollout used to
-  # demo ch6.x on default-pool. Re-enable once that infra is rebuilt.
-  syncPolicy: {}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
