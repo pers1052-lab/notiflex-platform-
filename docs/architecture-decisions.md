@@ -135,3 +135,11 @@
 - 이메일 대비 간편 — Gmail 앱 비밀번호·SMTP 설정이 필요 없음
 - 카카오톡 대비 안정적 — Access Token 주기적 갱신이나 별도 브리지 서버 운영이 불필요
 - Alertmanager 네이티브 지원 — `slack_configs`로 Alertmanager가 직접 전송, 추가 컴포넌트 없이 GitOps 흐름 유지
+
+## ADR-018: 테넌트 리소스 격리 — ResourceQuota + LimitRange (ch7.4)
+**시점**: 2026-09 / **결정**: 네임스페이스별 ResourceQuota + LimitRange 채택 (vs NetworkPolicy만 적용, 수동 모니터링)
+**이유**:
+- K8s 네이티브 — 추가 컨트롤러나 외부 도구 없이 API 서버 admission만으로 강제
+- 노이지 네이버 방지 — 한 테넌트(예: enterprise)가 Pod을 과다 생성해도 다른 테넌트(smb)의 리소스를 침범 불가
+- 기존 워크로드 무중단 — 컨테이너가 resources를 지정하지 않아도 LimitRange가 기본 request/limit(50m/64Mi → 200m/256Mi)을 자동 주입해 admission을 통과시킴
+- App of Apps와 자연 결합 — `k8s/smb/`·`k8s/enterprise/`에 매니페스트 하나씩 추가하는 것만으로 ArgoCD가 배포·유지
