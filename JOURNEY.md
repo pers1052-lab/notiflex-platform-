@@ -21,7 +21,7 @@
 | ch4 | 4.4 알림 | ✅ | 2026-04-30 | 2026-09-18 클러스터 재구축 후 `k8s/monitoring/pod-restart-alert.yaml`(기존 파일) 재적용. busybox 이미지로 실제 CrashLoopBackOff 유발해 `inactive→pending→firing` 전이 및 Alertmanager 수신(`PodRestartTooMany` active)까지 엔드투엔드 검증 완료. 테스트 후 v0.1.1로 이미지 복원. 이어서 Slack Incoming Webhook 연동 완료 — 아래 도구 선택 기록/트러블슈팅 참고 |
 | ch5 | 5.2 트래픽 관리 | ✅ | 2026-04-30 | 2026-09-21 클러스터 재구축분에 Gateway API 재적용 (proxy-only-subnet 재생성 + `k8s/smb/gateway.yaml`·`healthcheckpolicy.yaml` 직접 kubectl apply — ArgoCD `notiflex-smb`는 같은 디렉터리의 Rollout/SecretProviderClass CRD 미설치로 전체 sync 실패 중이라 GitOps 경로 대신 임시 적용). 외부 IP `35.216.16.34` 할당, `/health` 200 확인. `/id`는 404(현재 배포된 임시 버전이 v0.1.1이라 엔드포인트 없음, 정상) |
 | ch5 | 5.3 무중단 배포 | ✅ | 2026-04-30 | 2026-09-21 클러스터 재구축분에 Argo Rollouts 재설치 재시연: `install.yaml`의 CRD(rollouts.argoproj.io 등)가 `kubectl apply`의 last-applied-configuration 주석 262144바이트 한도를 초과해 실패 — `--server-side --force-conflicts`로 우회 설치. git의 `k8s/smb/rollout.yaml`은 이미 ch6.3 Canary+Valkey/Kafka/Tempo/CSI 의존성까지 반영된 미래 버전이라 그대로 쓸 수 없어(node pool·CSI 등 미구축), 임시 Deployment(v0.1.1)를 삭제하고 blueGreen 전략의 임시 Rollout(스크래치패드, git 미반영)으로 데모만 진행. preview Service는 저장소의 `k8s/smb/service-preview.yaml`(변경 없음) 적용. Rollout Healthy 확인, Gateway 경유 `/health`·`/version` 정상 — 아래 트러블슈팅 참고 |
-| ch5 | 5.4 ADR 기록 | ✅ | 2026-04-30 | |
+| ch5 | 5.4 ADR 기록 | ✅ | 2026-04-30 | 2026-09-21 `docs/architecture-decisions.md`는 이미 ADR-001~016까지 기록되어 있어 재작성 불필요. JOURNEY.md 도구 선택 기록에는 있었으나 ADR 파일에는 누락됐던 ch4.4 알림 채널(Slack Incoming Webhook) 결정을 ADR-017로 파일 끝에 추가 |
 | ch6 | 6.1 캐시 | ✅ | 2026-04-30 | |
 | ch6 | 6.2 시크릿 관리 | ✅ | 2026-04-30 | |
 | ch6 | 6.3 Canary 전환 | ✅ | 2026-04-30 | |
@@ -65,7 +65,7 @@
 | 컴포넌트 | 버전 | 변경 이력 |
 |---------|------|----------|
 | Go | 1.25 | |
-| Notiflex 이미지 | v0.3.1 (저장소 코드 기준) / **v0.1.0 (2026-09-17 재구축 클러스터에 실제 배포된 버전)** | v0.1.0→v0.1.1→v0.2.0(Valkey)→v0.2.1(CSI)→v0.3.0(Kafka)→v0.3.1(OTel) |
+| Notiflex 이미지 | v0.3.1 (저장소 코드 기준) / **v0.1.2 (2026-09-21 재구축 클러스터에 실제 배포된 버전, 임시 blueGreen Rollout)** | v0.1.0→v0.1.1→**v0.1.2(2026-09-21, Blue/Green 전환 데모)**→v0.2.0(Valkey)→v0.2.1(CSI)→v0.3.0(Kafka)→v0.3.1(OTel) |
 | ArgoCD | v3.5.3 | 2026-09-18 재설치 (stable manifest 기준 최신) |
 | Kafka | 4.1.0 (Strimzi 1.0.0, KRaft) | |
 | OTel SDK | - (Tempo 설치, SDK 적용) | |
@@ -76,7 +76,7 @@
 
 | 노드풀 | 머신 타입 | 노드 수 | 주요 워크로드 |
 |--------|----------|---------|-------------|
-| default-pool | e2-medium | 2 (Spot) | (재생성 직후, Gateway API 활성화됨) |
+| default-pool | e2-medium | 2 (Spot) | 2026-09-21: Gateway(외부 IP 35.216.16.34)·argo-rollouts 컨트롤러·notiflex-api Rollout(blueGreen, v0.1.2) 배치됨 |
 | api-pool | e2-medium | 1 | notiflex-api (smb + enterprise) — 재생성 필요 (ch7.2) |
 | worker-pool | e2-standard-2 | 1 | Kafka (ch8) — 재생성 필요 (ch7.2) |
 | ops-pool | e2-small | 1 | Tempo, CronJob (ch8) — 재생성 필요 (ch7.2) |
