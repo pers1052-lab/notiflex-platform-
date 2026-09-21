@@ -19,7 +19,7 @@
 | ch4 | 4.2 메트릭 모니터링 | ✅ | 2026-04-30 | 2026-09-18 클러스터 재구축 후 kube-prometheus-stack 재설치 (Prometheus/Grafana/Alertmanager 등 7 Pod 전부 Running, Pending 없음). Prometheus 타겟 16/18 up(coredns 2개만 down, GKE 환경 특성상 무해) |
 | ch4 | 4.3 로그 수집 | ✅ | 2026-04-30 | 2026-09-18 Loki+Fluent Bit 재설치. Grafana Loki 데이터소스 오등록, Fluent Bit output 설정 오류 2건 발견/수정 — 아래 트러블슈팅 참고 |
 | ch4 | 4.4 알림 | ✅ | 2026-04-30 | 2026-09-18 클러스터 재구축 후 `k8s/monitoring/pod-restart-alert.yaml`(기존 파일) 재적용. busybox 이미지로 실제 CrashLoopBackOff 유발해 `inactive→pending→firing` 전이 및 Alertmanager 수신(`PodRestartTooMany` active)까지 엔드투엔드 검증 완료. 테스트 후 v0.1.1로 이미지 복원. 이어서 Slack Incoming Webhook 연동 완료 — 아래 도구 선택 기록/트러블슈팅 참고 |
-| ch5 | 5.2 트래픽 관리 | ✅ | 2026-04-30 | |
+| ch5 | 5.2 트래픽 관리 | ✅ | 2026-04-30 | 2026-09-21 클러스터 재구축분에 Gateway API 재적용 (proxy-only-subnet 재생성 + `k8s/smb/gateway.yaml`·`healthcheckpolicy.yaml` 직접 kubectl apply — ArgoCD `notiflex-smb`는 같은 디렉터리의 Rollout/SecretProviderClass CRD 미설치로 전체 sync 실패 중이라 GitOps 경로 대신 임시 적용). 외부 IP `35.216.16.34` 할당, `/health` 200 확인. `/id`는 404(현재 배포된 임시 버전이 v0.1.1이라 엔드포인트 없음, 정상) |
 | ch5 | 5.3 무중단 배포 | ✅ | 2026-04-30 | |
 | ch5 | 5.4 ADR 기록 | ✅ | 2026-04-30 | |
 | ch6 | 6.1 캐시 | ✅ | 2026-04-30 | |
