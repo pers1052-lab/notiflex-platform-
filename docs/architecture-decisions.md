@@ -127,3 +127,11 @@
 - ops-pool 배치 — 배치 워크로드를 운영 전용 노드에 격리
 - ArgoCD가 매니페스트로 관리 — git에서 스케줄 변경 시 ArgoCD가 자동 반영
 - Job 히스토리 보존 — successfulJobsHistoryLimit/failedJobsHistoryLimit으로 실행 이력 추적
+
+## ADR-017: 알림 채널 — Slack Incoming Webhook (ch4.4)
+**시점**: 2026-04 / **결정**: Slack Incoming Webhook 채택 (vs 이메일(Gmail SMTP), 카카오톡 나에게 보내기 API)
+**이유**:
+- 설정 절차 최소 — Webhook URL 하나만 발급받으면 바로 연동, 별도 인증 서버 불필요
+- 이메일 대비 간편 — Gmail 앱 비밀번호·SMTP 설정이 필요 없음
+- 카카오톡 대비 안정적 — Access Token 주기적 갱신이나 별도 브리지 서버 운영이 불필요
+- Alertmanager 네이티브 지원 — `slack_configs`로 Alertmanager가 직접 전송, 추가 컴포넌트 없이 GitOps 흐름 유지
