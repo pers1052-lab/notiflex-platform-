@@ -26,8 +26,8 @@
 | ch6 | 6.2 시크릿 관리 | ✅ | 2026-04-30 | 2026-09-21 클러스터 재구축분에 GKE Secret Manager CSI 재구성. `--enable-secret-manager` 애드온 활성화(Workload Identity는 ch2.5부터 이미 활성 상태 확인), `valkey-password` 시크릿을 Google Secret Manager에 생성(`printf`로 개행 없이), GCP SA `notiflex-secrets` + K8s SA `notiflex-sa`를 Workload Identity로 바인딩(`roles/secretmanager.secretAccessor`, `roles/iam.workloadIdentityUser`). git의 `k8s/smb/secret-provider.yaml`에 남아있던 구 프로젝트 ID(`project-75fce205-dfa5-4975-a56`)를 `notiflex-09019`로 수정해 적용(이 파일은 정식 커밋 대상). 임시 blueGreen Rollout에 `serviceAccountName: notiflex-sa` + CSI 볼륨을 추가하고 `VALKEY_PASSWORD`(Secret 직접 참조)를 `VALKEY_PASSWORD_FILE`(CSI 마운트)로 전환 — 이 Rollout 자체는 여전히 스크래치패드 기반(git의 `k8s/smb/rollout.yaml`은 ch6.3/ch7/ch8 의존성이 있는 미래 버전이라 그대로 못 씀). 승격 후 Gateway 경유 `/id` 반복 호출로 Valkey 연동 유지 확인(id 8→9) — 아래 트러블슈팅 참고 |
 | ch6 | 6.3 Canary 전환 | ✅ | 2026-04-30 | 2026-09-21 클러스터 재구축분에 Blue/Green→Canary 재시연. git의 `k8s/smb/rollout.yaml`은 이미 Canary 전략으로 작성돼 있었으나 api-pool nodeSelector·Kafka/OTel 의존성 때문에 그대로 적용 불가라 스크래치 Rollout(default-pool, v0.3.2)에 Canary 전략만 반영. `kubectl delete rollout` 직후 `notiflex-smb`의 `selfHeal`이 git의 미래 스펙(api-pool 등)으로 즉시 복원해 Pod Pending 발생 — 해당 인프라(ch7.2/ch8)가 갖춰질 때까지 `argocd/apps/notiflex-smb.yaml`의 automated sync를 비활성화(커밋 6d0fd83)하고 진행. `kubectl argo rollouts` 플러그인 미설치라 `promote --full` 대신 깨진 구 ReplicaSet을 `scale --replicas=0` 후 삭제해 정리. 이후 데모용 버전 v0.3.3(main.go 버전 문자열만 변경, `gcloud builds submit`)을 배포해 Canary 20%→50%→80%→100% 전 단계(step 0~6) 정상 진행과 `stableRS` 승격을 폴링으로 확인, Gateway `/id` 응답으로 Valkey 공유 상태 유지 확인(12→13) — 아래 트러블슈팅 참고 |
 | ch6 | 6.4 아키텍처 스냅샷 | ✅ | 2026-04-30 | 2026-09-21 `claude-context/architecture.md`를 재구축 클러스터의 **현재 실제 상태**(ch6.3까지) 기준으로 전면 재작성. 기존 파일은 원본 ch9 완료 시점 스냅샷(구 프로젝트 ID, api/worker/ops-pool, Kafka, Tempo 포함)이라 재구축 진행 상황과 불일치했음 — 6개 섹션(3층 지식 구조/클러스터 토폴로지/컴포넌트 다이어그램/배포 파이프라인/관측 가능성/주요 네임스페이스) 모두 클러스터 직접 조회 결과로 재작성, 미완료 항목(api-pool 등 노드풀, Kafka, Tempo, enterprise Degraded, notiflex-smb 수동 동기화)을 명시적으로 표시 |
-| ch7 | 7.2 멀티 노드풀 | ✅ | 2026-04-30 | |
-| ch7 | 7.3 App of Apps | ✅ | 2026-04-30 | |
+| ch7 | 7.2 멀티 노드풀 | ✅ | 2026-04-30 | 2026-09-21 클러스터 재구축분에 api-pool/worker-pool/ops-pool 3개 노드풀 재생성(모두 Spot, `--workload-metadata=GKE_METADATA`). ops-pool 생성 즉시 그동안 Pending이던 `notiflex-healthcheck` CronJob Pod가 자동 정상화. api-pool 생성으로 git의 `k8s/smb/rollout.yaml`(nodeSelector 포함, 이미 CI가 최신 이미지 `sha-5d84e1a`=v0.3.3로 갱신해둔 상태)이 드디어 스케줄 가능해져, ch6.3부터 이어오던 **스크래치 임시 Rollout을 완전히 폐기**하고 `argocd/apps/notiflex-smb.yaml`의 automated sync를 재활성화(커밋 2774505) — ArgoCD가 git 매니페스트를 그대로 Canary 배포(20→50→80→100%), `notiflex-smb` Application이 Synced/Healthy로 전환됨. Kafka/OTel(ch8 미완료) 관련 env는 앱 코드가 non-fatal로 처리해 재시도 로그만 남기고 정상 동작(Gateway `/id` 14→15 확인, api-pool 배치 확인) |
+| ch7 | 7.3 App of Apps | ✅ | 2026-04-30 | 2026-09-21 재구축 트랙에서 점검: `argocd/root-app.yaml`(path: `argocd/apps`, `directory.recurse: true`, automated)과 `argocd/apps/notiflex-smb.yaml`·`notiflex-enterprise.yaml`(둘 다 `sync-wave: "2"`)이 클러스터 재구축과 무관하게 git에 그대로 유지되어 있었음 — 재작성 불필요, 구조 그대로 유효. `kubectl get application -n argocd`로 두 하위 Application이 `tracking-id: root-app:argoproj.io/Application:argocd/<name>`으로 root-app에 의해 관리되고 있음을 확인. ch7.2에서 `notiflex-smb` automated를 재활성화한 것도 이 root-app 구조를 통해 반영됨(root-app이 `argocd/apps/notiflex-smb.yaml`의 syncPolicy 변경을 감지해 하위 Application에 적용) |
 | ch7 | 7.4 멀티테넌시 | ✅ | 2026-04-30 | |
 | ch8 | 8.1 메시징 | ✅ | 2026-04-30 | |
 | ch8 | 8.2 트레이싱 | ✅ | 2026-04-30 | |
@@ -72,14 +72,14 @@
 
 ## 현재 리소스
 
-> ⚠️ 2026-09-17 클러스터 재생성 직후 상태. api-pool/worker-pool/ops-pool은 ch7.2/ch8에서 다시 만들어야 아래 워크로드가 배치된다 (현재는 default-pool만 존재).
+> 2026-09-21 ch7.2 완료 시점. 5개 노드(default-pool ×2 + api/worker/ops-pool 각 ×1) 모두 재생성 완료.
 
 | 노드풀 | 머신 타입 | 노드 수 | 주요 워크로드 |
 |--------|----------|---------|-------------|
-| default-pool | e2-medium | 2 (Spot) | 2026-09-21: Gateway(외부 IP 35.216.16.34)·argo-rollouts 컨트롤러·notiflex-api Rollout(blueGreen, v0.1.2) 배치됨 |
-| api-pool | e2-medium | 1 | notiflex-api (smb + enterprise) — 재생성 필요 (ch7.2) |
-| worker-pool | e2-standard-2 | 1 | Kafka (ch8) — 재생성 필요 (ch7.2) |
-| ops-pool | e2-small | 1 | Tempo, CronJob (ch8) — 재생성 필요 (ch7.2) |
+| default-pool | e2-medium | 2 (Spot) | Gateway(외부 IP 35.216.16.34)·argocd·argo-rollouts 컨트롤러·monitoring(Prometheus/Grafana/Loki/Fluent Bit/Alertmanager)·valkey-primary |
+| api-pool | e2-medium | 1 (Spot) | notiflex-api Rollout (Canary, v0.3.3, ArgoCD `notiflex-smb`가 정식 관리 — 2026-09-21부터 스크래치 Rollout 아님) |
+| worker-pool | e2-standard-2 | 1 (Spot) | (비어있음) — Kafka 배치 예정 (ch8.1) |
+| ops-pool | e2-small | 1 (Spot) | notiflex-healthcheck CronJob |
 
 ## 트러블슈팅 이력
 
