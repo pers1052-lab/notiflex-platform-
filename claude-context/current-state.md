@@ -97,6 +97,7 @@ kubectl --context gke-sysnet4admin_book_gitaiops port-forward svc/kafka-ui -n ka
 5. **Consumer Group 없이 파티션만 늘려봐야 소용없다** — `ConsumePartition`으로 개별 구독하면 모든 Pod이 같은 메시지를 중복 수신한다. 파티션 병렬 처리는 `sarama.NewConsumerGroup`으로 그룹 조인해야 실제로 분산된다.
 6. **Kafka Consumer는 처음부터 다시 안 읽는다** — 커밋된 오프셋(브로커에 저장, `__consumer_offsets`)부터 재개. `Consumer.Offsets.Initial`은 커밋 이력이 아예 없을 때만 적용됨.
 7. **모든 kubectl 명령에 `--context` 필수** — 여러 클러스터를 오갈 때 사고 방지.
+8. **`kubectl patch`로 급하게 고친 값은 helm-values 파일에 반영을 잊기 쉽다** — ch6 진입 전 CPU 축소를 patch로만 했다가, helm-values 파일(100m/50m/25m)과 실제 라이브 스펙(5m)이 몇 달째 어긋나 있었음(2026-09-22 발견·수정). 급한 patch 이후엔 반드시 "이 값을 파일에도 옮겨야 한다"를 후속 작업으로 남길 것 — 안 그러면 다음 `helm upgrade -f <file>`이 조용히 리소스를 원복시킨다.
 
 ## 알려진 리스크 / 다음 단계 후보
 

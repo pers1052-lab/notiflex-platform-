@@ -98,6 +98,7 @@ kubectl --context gke-sysnet4admin_book_gitaiops port-forward svc/kafka-ui -n ka
 5. **Adding partitions without a Consumer Group does nothing** — subscribing individually via `ConsumePartition` makes every Pod receive the same message redundantly. Real parallel partition processing requires joining a group via `sarama.NewConsumerGroup`.
 6. **A Kafka Consumer doesn't re-read from the beginning** — it resumes from the committed offset (stored on the broker in `__consumer_offsets`). `Consumer.Offsets.Initial` only applies when there's no commit history at all.
 7. **`--context` is mandatory on every kubectl command** — prevents accidents when juggling multiple clusters.
+8. **A value fixed with `kubectl patch` in a hurry is easy to forget to mirror back into the helm-values file** — the CPU reduction before ch6 was only ever applied via patch, so the helm-values file (100m/50m/25m) and the live spec (5m) had silently diverged for months (found and fixed 2026-09-22). After any urgent patch, leave yourself a follow-up to port the value into the file too — otherwise the next `helm upgrade -f <file>` quietly reverts it.
 
 ## Known risks / candidate next steps
 
