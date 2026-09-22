@@ -95,23 +95,35 @@ func main() {
 	http.ListenAndServe(":8080", nil)
 }
 
+type notificationsHandler struct{}
+
+func (notificationsHandler) Setup(sarama.ConsumerGroupSession) error   { return nil }
+func (notificationsHandler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
+func (notificationsHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	for msg := range claim.Messages() {
+		log.Printf("[Kafka] 수신: partition=%d key=%s value=%s", claim.Partition(), string(msg.Key), string(msg.Value))
+		sess.MarkMessage(msg, "")
+	}
+	return nil
+}
+
 func consumeKafka(broker string) {
 	cfg := sarama.NewConfig()
 	cfg.Version = sarama.V4_2_0_0
-	consumer, err := sarama.NewConsumer([]string{broker}, cfg)
+	group, err := sarama.NewConsumerGroup([]string{broker}, "notiflex-workers", cfg)
 	if err != nil {
-		log.Printf("Kafka consumer 생성 실패: %v", err)
+		log.Printf("Kafka consumer group 생성 실패: %v", err)
 		return
 	}
-	defer consumer.Close()
-	pc, err := consumer.ConsumePartition("notifications", 0, sarama.OffsetNewest)
-	if err != nil {
-		log.Printf("Kafka partition consumer 생성 실패: %v", err)
-		return
-	}
-	defer pc.Close()
-	for msg := range pc.Messages() {
-		log.Printf("[Kafka] 수신: key=%s value=%s", string(msg.Key), string(msg.Value))
+	defer group.Close()
+
+	ctx := context.Background()
+	handler := notificationsHandler{}
+	for {
+		if err := group.Consume(ctx, []string{"notifications"}, handler); err != nil {
+			log.Printf("Kafka consumer group 오류: %v", err)
+			return
+		}
 	}
 }
 
@@ -120,7 +132,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	_, span := tracer.Start(r.Context(), "health")
 	defer span.End()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "v0.3.4"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "v0.3.5"})
 }
 
 func idHandler(w http.ResponseWriter, r *http.Request) {
