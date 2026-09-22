@@ -76,7 +76,7 @@ func main() {
 	if broker != "" {
 		cfg := sarama.NewConfig()
 		cfg.Producer.Return.Successes = true
-		cfg.Version = sarama.V4_1_0_0
+		cfg.Version = sarama.V4_2_0_0
 		kafkaProducer, err = sarama.NewSyncProducer([]string{broker}, cfg)
 		if err != nil {
 			log.Printf("Kafka 연결 실패 (계속): %v", err)
@@ -97,7 +97,7 @@ func main() {
 
 func consumeKafka(broker string) {
 	cfg := sarama.NewConfig()
-	cfg.Version = sarama.V4_1_0_0
+	cfg.Version = sarama.V4_2_0_0
 	consumer, err := sarama.NewConsumer([]string{broker}, cfg)
 	if err != nil {
 		log.Printf("Kafka consumer 생성 실패: %v", err)
@@ -120,7 +120,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	_, span := tracer.Start(r.Context(), "health")
 	defer span.End()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "v0.3.3"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "v0.3.4"})
 }
 
 func idHandler(w http.ResponseWriter, r *http.Request) {
