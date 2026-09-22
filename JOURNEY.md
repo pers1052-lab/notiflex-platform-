@@ -33,11 +33,11 @@
 | ch8 | 8.2 트레이싱 | ✅ | 2026-04-30 | 2026-09-22 클러스터 재구축분에 Grafana Tempo 재설치(ops-pool, `helm-values/tempo.yaml`, OTLP gRPC 4317). `k8s/monitoring/tempo-datasource.yaml`로 Grafana Tempo 데이터소스 등록(사이드카 자동 reload가 401로 막히는 기존 이슈로 `rollout restart deployment kube-prometheus-grafana` 수동 재기동 — ch4.3 트러블슈팅과 동일 증상). `app/main.go`의 `initTracer`/Rollout `OTEL_EXPORTER_OTLP_ENDPOINT`는 ch6 이전부터 이미 코드에 존재했으나 Tempo가 없어 non-fatal 연결 실패 상태였음 — 이번에 Tempo가 실제로 뜨면서 활성화됨. 독자 질문("각 구간 시간을 어떻게 측정?")에 따라 `idHandler`의 단일 span을 `valkey.incr`/`kafka.produce` 자식 span으로 분리(v0.3.6, `sha-1d4aefd`). Tempo Query API(`/api/traces`)로 직접 조회해 `id`(2295.5μs) → `valkey.incr`(440.4μs) + `kafka.produce`(1791.8μs) 3-span 구조 확인 |
 | ch8 | 8.3 CronJob | ✅ | 2026-04-30 | 2026-09-22 재확인: `k8s/smb/healthcheck-cronjob.yaml`(가이드 스펙과 완전히 일치)이 ch7.2 ops-pool 생성 시점부터 이미 정상 동작 중이었음 — 별도 배포 불필요. `kubectl get jobs -n notiflex` 최근 3건 모두 `Complete 1/1`, 로그 `헬스체크 성공: HTTP 200` 확인 |
 | ch8 | command-guardrails | ✅ | 2026-09-22 | `command-guardrails/` 디렉터리 신설, 위험 작업 3종(Kafka Topic 삭제, CronJob 수동 실행, 테넌트 Namespace 삭제) 절차서를 사전 확인→실행→사후 검증 3단 구조로 작성(커밋 59dcb12). 이것으로 영구 누적 자산 4종(CLAUDE.md, claude-context/, docs/architecture-decisions.md, command-guardrails/)이 모두 갖춰짐 — 8장 완전 종료 |
-| ch9 | 9.1 저장소 분석 | ✅ | 2026-04-30 | |
-| ch9 | 9.2 회고 | ✅ | 2026-04-30 | |
+| ch9 | 9.1 저장소 분석 | ✅ | 2026-04-30 | 2026-09-22 재구축 트랙 기준 재수행: 디렉터리 구조(27개 YAML/701줄, app 215줄), 커밋 히스토리(`main` 40개 vs `git log --all` 754개 — claude/codex/gemini 비교 브랜치 존재 확인), JOURNEY.md ↔ 실제 클러스터 대조(현재 버전/리소스 테이블 100% 일치 확인), ArgoCD 3개 Application 전부 Synced/Healthy 확인 |
+| ch9 | 9.2 회고 | ✅ | 2026-04-30 | 2026-09-22 재구축 트랙 기준 재수행: CLAUDE.md 성장 분석(최초 3줄→현재 3줄이지만 `--context` 강제 규칙으로 내용 교체 확인), 도구 선택 17건 종합, 4대 패턴(GKE/managed 우선·Argo 생태계 통일·Grafana 통합 관측·GitOps 호환) 도출, 재선택 시 대안 3건(CSI vs Sealed Secrets, Canary 도입 시점, Valkey vs Redis Streams) 정리 |
 | ch9 | 9.3 온보딩 문서 | ✅ | 2026-04-30 | 2026-09-22 `ONBOARDING.md` 전면 재작성. 기존 문서는 재구축 이전 정보(구 프로젝트 ID `project-75fce205-dfa5-4975-a56`, 구 Gateway IP `35.216.99.80`, ADR 001~016만 언급)를 담고 있어 실제 클러스터 조회 결과로 전량 교체 — 노드풀별 워크로드 표, 네임스페이스별 Pod 현황(kube-system 57개 포함 8개 네임스페이스), Kafka UI 접근법, command-guardrails 연동 FAQ 3건 추가, FAQ 총 7개(요구사항 6개 이상 충족) |
-| ch9 | 9.4 GitAIOps 분석 | ✅ | 2026-04-30 | |
-| ch9 | 9.5 마무리 | ✅ | 2026-04-30 | |
+| ch9 | 9.4 GitAIOps 분석 | ✅ | 2026-04-30 | 2026-09-22 재구축 트랙 기준 재수행: Git/AI/Ops 3요소를 이 저장소의 실제 파일로 매핑, ch8.1 Kafka 버전 트러블슈팅을 "루프가 도는 구체 사례"로, command-guardrails 신설 전후를 "루프가 강화되는 사례"로 제시. 커밋 타입 분포(ch5 docs 위주 vs ch7~8 feat/fix 증가)를 3-프롬프트 패턴 가속화의 정량적 근거로 연결 |
+| ch9 | 9.5 마무리 | ✅ | 2026-04-30 | 2026-09-22 재구축 트랙 기준 재수행: 5대 영역 제안을 이번 세션 실제 발견 사항에 근거해 구체화 — 보안(NetworkPolicy 전무 확인), 스케일링(HPA 없음, Kafka 브로커 단일 노드), 비용(ops-pool 136분간 NodeNotReady 6회 관측, Tempo resources 버그 감사 제안), 멀티리전(전 노드 단일 zone `asia-northeast3-a` 확인), 관측성(Tempo 샘플링 미설정, CronJob/Kafka lag 알림 부재) |
 
 ## 도구 선택 기록
 

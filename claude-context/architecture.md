@@ -1,9 +1,11 @@
-# Notiflex 아키텍처 스냅샷 — 클러스터 재구축분, ch8 완료 시점
+# Notiflex 아키텍처 스냅샷 — 클러스터 재구축분, ch9 완료 시점
 
 > ⚠️ **재구축 트랙 안내**: 이 클러스터(`notiflex-09019` 프로젝트)는 2026-09-17에 재생성되었고,
-> 독자는 ch2부터 순차적으로 재시연 중이다. 이 문서는 **재구축 클러스터의 현재 실제 상태
-> (ch8까지)**를 반영한다. ch8에서 다룬 Kafka·Tempo·CronJob이 전부 실제로 배포·검증됐다.
-> ch9(회고, 온보딩 문서, GitAIOps 분석, 마무리)만 아직 이 재구축 트랙에서 다시 진행되지 않았다.
+> 독자는 ch2부터 순차적으로 재시연했다. 이 문서는 **재구축 클러스터의 현재 실제 상태(ch9까지)**
+> 를 반영한다. ch8의 Kafka·Tempo·CronJob과 ch9의 회고·온보딩 문서·GitAIOps 분석·마무리 제안까지
+> 전부 이 재구축 트랙에서 실제로 수행·검증됐다. 인프라 변경은 ch8이 마지막이며, ch9은 분석·문서화
+> 작업이라 클러스터 토폴로지 자체에는 변화가 없다(단, ch9.5에서 발견한 개선 과제는 `## 다음 단계
+> 후보` 참고).
 
 ## 3층 지식 구조
 
@@ -99,9 +101,13 @@ namespace: monitoring  (default-pool + ops-pool)
 ├── kube-prometheus-stack (Prometheus + Grafana + Alertmanager + kube-state-metrics)
 ├── Loki + Fluent Bit (DaemonSet, 전 노드)
 └── tempo-0 (ops-pool, grafana/tempo:2.9.0, OTLP gRPC :4317 수신, 조회 API :3200)
+      requests 25m/128Mi, limits 200m/256Mi (2026-09-22 수정 — helm-values/tempo.yaml의
+      resources가 최상위에 있어 미적용이던 버그, tempo.resources 경로로 정정)
       Grafana 데이터소스 등록 완료 (k8s/monitoring/tempo-datasource.yaml)
       ⚠️ ops-pool은 Spot VM — kubelet 순단으로 노드가 일시 NotReady 되면
-         Tempo Service Endpoints가 비어 Grafana 연결이 끊길 수 있음(수 분 내 자동 복구됨)
+         Tempo Service Endpoints가 비어 Grafana 연결이 끊길 수 있음(수 분 내 자동 복구됨).
+         2026-09-22 관측: 136분 동안 NotReady 이벤트 6회 발생 — 일회성이 아니라
+         반복되는 패턴일 수 있어 지속 관찰 필요 (9.5 다음 단계 제안 참고)
 ```
 
 ## 배포 파이프라인
@@ -157,5 +163,16 @@ notiflex-smb/enterprise 애플리케이션 워크로드만 GitOps로 관리하�
 | monitoring | kube-prometheus-stack, Loki, Fluent Bit, Alertmanager, Tempo | 관측 가능성 3축(메트릭/로그/트레이스) 전부 갖춤 |
 | default | (워크로드 없음) | GKE 기본 네임스페이스 |
 
-**남은 재구축 항목**: ch9(회고, 온보딩 문서, GitAIOps 분석, 마무리)만 재구축 트랙에서 아직
-다시 진행되지 않았다. 인프라·애플리케이션 컴포넌트는 ch8까지 전부 실제 배포 완료.
+**재구축 완료**: ch2~ch9 전 챕터가 이 트랙에서 실제로 수행·검증됐다. 인프라·애플리케이션
+컴포넌트는 ch8에서 완성됐고, ch9은 분석·회고·문서화(코드/인프라 변경 없음)였다.
+
+## 다음 단계 후보 (ch9.5에서 도출, 아직 미착수)
+
+실제 클러스터 조회로 확인한 구체적 빈틈. 우선순위 순:
+
+1. **NetworkPolicy 전무** — `monitoring`/`kafka`/`notiflex`/`enterprise` 어디에도 없음. 테넌트 간 트래픽이 사실상 전부 허용된 상태(예: enterprise → notiflex Valkey cross-namespace 접근이 정책상 막혀있지 않음)
+2. **HPA 없음** — 모든 Rollout이 고정 replicas. Kafka 브로커도 단일 노드(KafkaNodePool replicas: 1)라 단일 장애점
+3. **단일 zone(asia-northeast3-a)** — Zonal 클러스터라 존 장애 시 전체 다운. Regional 전환이 멀티리전보다 선행돼야 함
+4. **Tempo 샘플링 미설정** — OTel SDK 기본값(AlwaysSample)으로 100% 트레이스 중, 트래픽 증가 시 Tempo 저장량 문제 가능
+5. **CronJob 실패 / Kafka Consumer lag 알림 없음** — 둘 다 `kube_state_metrics` 메트릭은 이미 수집 중이라 PrometheusRule만 추가하면 됨
+6. **ops-pool 노드 불안정 반복 관측** — 2026-09-22 하루에만 NotReady 6회(136분 내). 일회성인지 패턴인지 추가 관찰 필요, 필요시 머신타입 상향 검토
