@@ -35,7 +35,7 @@
 | ch8 | command-guardrails | ✅ | 2026-09-22 | `command-guardrails/` 디렉터리 신설, 위험 작업 3종(Kafka Topic 삭제, CronJob 수동 실행, 테넌트 Namespace 삭제) 절차서를 사전 확인→실행→사후 검증 3단 구조로 작성(커밋 59dcb12). 이것으로 영구 누적 자산 4종(CLAUDE.md, claude-context/, docs/architecture-decisions.md, command-guardrails/)이 모두 갖춰짐 — 8장 완전 종료 |
 | ch9 | 9.1 저장소 분석 | ✅ | 2026-04-30 | |
 | ch9 | 9.2 회고 | ✅ | 2026-04-30 | |
-| ch9 | 9.3 온보딩 문서 | ✅ | 2026-04-30 | |
+| ch9 | 9.3 온보딩 문서 | ✅ | 2026-04-30 | 2026-09-22 `ONBOARDING.md` 전면 재작성. 기존 문서는 재구축 이전 정보(구 프로젝트 ID `project-75fce205-dfa5-4975-a56`, 구 Gateway IP `35.216.99.80`, ADR 001~016만 언급)를 담고 있어 실제 클러스터 조회 결과로 전량 교체 — 노드풀별 워크로드 표, 네임스페이스별 Pod 현황(kube-system 57개 포함 8개 네임스페이스), Kafka UI 접근법, command-guardrails 연동 FAQ 3건 추가, FAQ 총 7개(요구사항 6개 이상 충족) |
 | ch9 | 9.4 GitAIOps 분석 | ✅ | 2026-04-30 | |
 | ch9 | 9.5 마무리 | ✅ | 2026-04-30 | |
 
