@@ -1,0 +1,22 @@
+yamlApplicationConfig:
+  kafka:
+    clusters:
+      - name: notiflex-kafka
+        bootstrapServers: notiflex-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092
+  auth:
+    type: disabled
+  management:
+    health:
+      ldap:
+        enabled: false
+
+nodeSelector:
+  cloud.google.com/gke-nodepool: worker-pool
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 300m
+    memory: 512Mi

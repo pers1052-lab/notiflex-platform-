@@ -132,7 +132,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	_, span := tracer.Start(r.Context(), "health")
 	defer span.End()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "v0.3.5"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "v0.3.6"})
 }
 
 func idHandler(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +140,9 @@ func idHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(r.Context(), "id")
 	defer span.End()
 
+	_, valkeySpan := tracer.Start(ctx, "valkey.incr")
 	result, err := valkeyClient.Do(ctx, valkeyClient.B().Incr().Key("notiflex:id").Build()).AsInt64()
+	valkeySpan.End()
 	if err != nil {
 		http.Error(w, "Valkey error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -151,6 +153,7 @@ func idHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if kafkaProducer != nil {
+		_, kafkaSpan := tracer.Start(ctx, "kafka.produce")
 		msg := &sarama.ProducerMessage{
 			Topic: "notifications",
 			Key:   sarama.StringEncoder(fmt.Sprintf("id-%d", result)),
@@ -159,6 +162,7 @@ func idHandler(w http.ResponseWriter, r *http.Request) {
 		if _, _, err := kafkaProducer.SendMessage(msg); err != nil {
 			log.Printf("[Kafka] 전송 실패: %v", err)
 		}
+		kafkaSpan.End()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
