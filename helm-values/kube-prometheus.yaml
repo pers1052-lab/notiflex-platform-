@@ -2,13 +2,13 @@ prometheus:
   prometheusSpec:
     resources:
       requests:
-        cpu: 100m
+        cpu: 5m
         memory: 256Mi
 
 grafana:
   resources:
     requests:
-      cpu: 50m
+      cpu: 5m
       memory: 128Mi
   adminPassword: admin
 
@@ -16,7 +16,7 @@ alertmanager:
   alertmanagerSpec:
     resources:
       requests:
-        cpu: 25m
+        cpu: 5m
         memory: 64Mi
     secrets:
       - alertmanager-slack-webhook
