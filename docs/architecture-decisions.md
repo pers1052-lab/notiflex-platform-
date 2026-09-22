@@ -105,7 +105,7 @@
 - 운영 가시성 — kubectl get pods -n enterprise로 테넌트별 상태 즉시 확인
 
 ## ADR-014: 메시징 — Kafka (ch8.1)
-**시점**: 2026-04 / **결정**: Strimzi Kafka (KRaft 모드, v4.1.0) 채택 (vs RabbitMQ, NATS, Pulsar)
+**시점**: 2026-04, 2026-09 버전 조정 / **결정**: Strimzi Kafka (KRaft 모드) 채택 (vs RabbitMQ, NATS, Pulsar). 버전은 v4.1.0 → **v4.2.0**으로 조정(Strimzi 1.2.0이 4.1.0을 지원하지 않아 재구축 시 `UnsupportedKafkaVersionException` 발생, 호환 매트릭스 확인 후 변경)
 **이유**:
 - 고처리량 + 순서 보장 — 알림 이벤트의 파티션별 순서 유지
 - Strimzi로 K8s 네이티브 관리 — KafkaNodePool CRD로 브로커 사양 선언적 관리
