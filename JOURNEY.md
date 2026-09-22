@@ -29,7 +29,7 @@
 | ch7 | 7.2 멀티 노드풀 | ✅ | 2026-04-30 | 2026-09-21 클러스터 재구축분에 api-pool/worker-pool/ops-pool 3개 노드풀 재생성(모두 Spot, `--workload-metadata=GKE_METADATA`). ops-pool 생성 즉시 그동안 Pending이던 `notiflex-healthcheck` CronJob Pod가 자동 정상화. api-pool 생성으로 git의 `k8s/smb/rollout.yaml`(nodeSelector 포함, 이미 CI가 최신 이미지 `sha-5d84e1a`=v0.3.3로 갱신해둔 상태)이 드디어 스케줄 가능해져, ch6.3부터 이어오던 **스크래치 임시 Rollout을 완전히 폐기**하고 `argocd/apps/notiflex-smb.yaml`의 automated sync를 재활성화(커밋 2774505) — ArgoCD가 git 매니페스트를 그대로 Canary 배포(20→50→80→100%), `notiflex-smb` Application이 Synced/Healthy로 전환됨. Kafka/OTel(ch8 미완료) 관련 env는 앱 코드가 non-fatal로 처리해 재시도 로그만 남기고 정상 동작(Gateway `/id` 14→15 확인, api-pool 배치 확인) |
 | ch7 | 7.3 App of Apps | ✅ | 2026-04-30 | 2026-09-21 재구축 트랙에서 점검: `argocd/root-app.yaml`(path: `argocd/apps`, `directory.recurse: true`, automated)과 `argocd/apps/notiflex-smb.yaml`·`notiflex-enterprise.yaml`(둘 다 `sync-wave: "2"`)이 클러스터 재구축과 무관하게 git에 그대로 유지되어 있었음 — 재작성 불필요, 구조 그대로 유효. `kubectl get application -n argocd`로 두 하위 Application이 `tracking-id: root-app:argoproj.io/Application:argocd/<name>`으로 root-app에 의해 관리되고 있음을 확인. ch7.2에서 `notiflex-smb` automated를 재활성화한 것도 이 root-app 구조를 통해 반영됨(root-app이 `argocd/apps/notiflex-smb.yaml`의 syncPolicy 변경을 감지해 하위 Application에 적용). 이어서 독자 요청으로 sync-wave를 `notiflex-smb: "1"`, `notiflex-enterprise: "2"`로 분리(커밋 477ce2a) — 기반 앱(smb)이 Healthy가 된 뒤 신규 테넌트(enterprise)가 설치되도록 순서 지정, root-app 재확인 결과 정상 반영(smb=wave1/Healthy, enterprise=wave2/Degraded — Degraded는 ch7.4 대기 중인 기존 이슈로 sync-wave와 무관) |
 | ch7 | 7.4 멀티테넌시 | ✅ | 2026-04-30 | 2026-09-21 재구축 클러스터에 enterprise 테넌트 재정착. `k8s/enterprise/rollout.yaml`·`secret-provider.yaml`의 구 프로젝트 ID(`project-75fce205-...`)·구버전 이미지(v0.3.1)를 `notiflex-09019`/v0.3.3으로 갱신, CSI로 대체되어 쓰이지 않던 `valkey-secret.yaml`(구 비밀번호 하드코딩, smb 패턴과 불일치)은 제거(커밋 38c3053). `enterprise` 네임스페이스에 없던 `notiflex-sa`(Workload Identity SA)를 ch6.2와 동일하게 생성하고, GCP SA `notiflex-secrets`의 `workloadIdentityUser` 바인딩에 `enterprise/notiflex-sa` 멤버 추가. 초기 sync 시도 때 SA 부재로 실패했던 구 ReplicaSet이 정리되지 않고 남아 Rollout이 Progressing에 멈춰있어 수동 삭제로 해소. 최종적으로 `notiflex-smb`·`notiflex-enterprise`·`root-app` 전부 Synced/Healthy 달성 — 재구축 이후 처음으로 세 Application 모두 정상 상태. Enterprise Pod에서 `notiflex` 네임스페이스의 공유 Valkey(`valkey-primary.notiflex.svc.cluster.local`)로 cross-namespace 접근해 `/id` 카운터가 SMB 테넌트와 이어짐(15→16→17)을 포트포워딩으로 검증. 독자 질문으로 노이지 네이버 방지책 추가: `k8s/smb/resourcequota.yaml`(notiflex 네임스페이스, requests.cpu 500m/requests.memory 512Mi/limits.cpu 1/limits.memory 1Gi/pods 15)과 `k8s/enterprise/resourcequota.yaml`(enterprise, requests.cpu 200m/requests.memory 128Mi/limits.cpu 400m/limits.memory 256Mi/pods 5)에 각각 ResourceQuota+LimitRange(컨테이너 기본 request 50m/64Mi, limit 200m/256Mi) 추가(커밋 abab597) — 기존 컨테이너가 resources 미지정이라 LimitRange가 기본값을 주입해야 하며, 기존 실행 중이던 Pod은 재생성 전까지는 quota에 값이 반영되지 않음(admission 시점에만 적용) |
-| ch8 | 8.1 메시징 | ✅ | 2026-04-30 | |
+| ch8 | 8.1 메시징 | ✅ | 2026-04-30 | 2026-09-22 클러스터 재구축분에 Strimzi Operator + Kafka(KRaft, worker-pool) 재설치. 원래 매니페스트가 지정한 Kafka 4.1.0이 현재 Strimzi 1.2.0(지원 버전 4.2.0/4.2.1/4.3.0/4.3.1)에서 `UnsupportedKafkaVersionException` — 4.2.0으로 조정, sarama `cfg.Version`도 `V4_2_0_0`으로 맞춤(v0.3.4, CI 빌드 `sha-40af37a`). `notifications` 토픽(3 partitions) Ready, entity-operator Running. `/id` 호출 시 Producer 전송 → 두 Pod 각각의 Consumer가 모두 수신 로그 출력 확인(컨슈머 그룹 미사용이라 Pod마다 개별 수신) — 아래 트러블슈팅 참고 |
 | ch8 | 8.2 트레이싱 | ✅ | 2026-04-30 | |
 | ch8 | 8.3 CronJob | ✅ | 2026-04-30 | |
 | ch9 | 9.1 저장소 분석 | ✅ | 2026-04-30 | |
@@ -59,6 +59,7 @@
 | 멀티테넌시 (ch7.4) | Namespace 분리 + per-tenant Rollout | 단일 namespace + 라벨 격리, vCluster | 강한 격리, ArgoCD App of Apps와 자연 결합, 테넌트별 독립 배포 |
 | 테넌트 리소스 격리 (ch7.4 후속) | ResourceQuota + LimitRange (네임스페이스별) | NetworkPolicy만 적용, 수동 모니터링 | K8s 네이티브, 노이지 네이버 방지, 컨테이너 resources 미지정 시에도 LimitRange가 기본값 주입 |
 | 배치 자동화 (ch8.3) | K8s CronJob | 외부 cron + 쿠버네티스 외부 트리거, Argo Workflows | 쿠버네티스 네이티브, ops-pool 배치, ArgoCD가 매니페스트로 관리 |
+| 메시징 (ch8.1) | Apache Kafka (Strimzi Operator, KRaft) | RabbitMQ, NATS, Redis Streams | 업계 표준·GitOps 호환(CRD)·메시지 영속성, worker-pool에 격리 배치 |
 | 알림 채널 (ch4.4) | Slack Incoming Webhook | 이메일(Gmail SMTP), 카카오톡(나에게 보내기 API), Webhook 범용 | 설정 절차 최소(Webhook URL 하나), 이메일 대비 앱 비밀번호/SMTP 설정 불필요, 카카오톡 대비 토큰 갱신·브리지 서버 불필요 |
 
 ## 현재 버전
@@ -66,9 +67,9 @@
 | 컴포넌트 | 버전 | 변경 이력 |
 |---------|------|----------|
 | Go | 1.25 | |
-| Notiflex 이미지 | v0.3.3 (저장소 코드 기준, `main.go` 실측) / **v0.3.3 (2026-09-21 재구축 클러스터에 실제 배포된 버전, 임시 Canary Rollout — Valkey CSI 연동, Kafka/OTel 비활성)** | v0.1.0→v0.1.1→v0.1.2(2026-09-21, Blue/Green 전환 데모)→v0.2.0(Valkey)→v0.2.1(CSI)→v0.3.0(Kafka)→v0.3.1(OTel)→v0.3.2(코드 실측, health 응답 버전 문자열 기준)→**v0.3.3(2026-09-21, Canary 20→50→80→100% 진행 데모용 버전 문자열 bump, 기능 변경 없음)** |
+| Notiflex 이미지 | v0.3.4 (저장소 코드 기준 및 2026-09-22 재구축 클러스터 실배포, `sha-40af37a`, ArgoCD `notiflex-smb`가 정식 Canary 관리 — Valkey CSI + Kafka 연동, OTel은 비활성) | v0.1.0→v0.1.1→v0.1.2(2026-09-21, Blue/Green 전환 데모)→v0.2.0(Valkey)→v0.2.1(CSI)→v0.3.0(Kafka)→v0.3.1(OTel)→v0.3.2(코드 실측, health 응답 버전 문자열 기준)→v0.3.3(2026-09-21, Canary 20→50→80→100% 진행 데모용 버전 문자열 bump)→**v0.3.4(2026-09-22, Kafka sarama Version을 V4_2_0_0으로 조정, 실제 Kafka 연동 활성화)** |
 | ArgoCD | v3.5.3 | 2026-09-18 재설치 (stable manifest 기준 최신) |
-| Kafka | 4.1.0 (Strimzi 1.0.0, KRaft) | |
+| Kafka | 4.2.0 (Strimzi 1.2.0, KRaft) | 2026-09-22 재구축분 설치. 매니페스트 원안(4.1.0)이 Strimzi 1.2.0에서 미지원이라 4.2.0으로 조정 — 아래 트러블슈팅 참고 |
 | OTel SDK | - (Tempo 설치, SDK 적용) | |
 
 ## 현재 리소스
@@ -79,7 +80,7 @@
 |--------|----------|---------|-------------|
 | default-pool | e2-medium | 2 (Spot) | Gateway(외부 IP 35.216.16.34)·argocd·argo-rollouts 컨트롤러·monitoring(Prometheus/Grafana/Loki/Fluent Bit/Alertmanager)·valkey-primary |
 | api-pool | e2-medium | 1 (Spot) | notiflex-api Rollout (Canary, v0.3.3, ArgoCD `notiflex-smb`가 정식 관리 — 2026-09-21부터 스크래치 Rollout 아님) |
-| worker-pool | e2-standard-2 | 1 (Spot) | (비어있음) — Kafka 배치 예정 (ch8.1) |
+| worker-pool | e2-standard-2 | 1 (Spot) | Strimzi Operator + Kafka(controller+broker, KRaft) + entity-operator (ch8.1, 2026-09-22) |
 | ops-pool | e2-small | 1 (Spot) | notiflex-healthcheck CronJob |
 
 ## 트러블슈팅 이력
@@ -106,3 +107,4 @@
 | 2026-09-21 | ch6.3: `notiflex-smb`가 `automated.selfHeal: true`인 상태에서 임시 Rollout을 `kubectl delete rollout`하자, ArgoCD가 즉시 git의 `k8s/smb/rollout.yaml`(ch6.3 이후 미래 스펙 — api-pool nodeSelector + Kafka/OTel + `sha-434d23a` 이미지)로 되살려 신규 Pod 2개가 `0/2 nodes are available: node affinity/selector 불일치`로 계속 Pending | ArgoCD `notiflex-smb`(및 이를 관리하는 root-app이 참조하는) `argocd/apps/notiflex-smb.yaml`의 `syncPolicy.automated`를 제거(`syncPolicy: {}`)해 수동 동기화로 전환 후 git push, root-app에 `argocd.argoproj.io/refresh=hard` 어노테이션으로 즉시 반영. **재구축 재시연 트랙 전반에 적용되는 교훈**: 이 클러스터에서 Rollout처럼 ArgoCD가 추적 중인 리소스는 `kubectl delete`하지 말고 `kubectl apply`로 필드만 바꿀 것 — `delete`는 selfHeal의 즉시 복원을 유발한다. api-pool/Kafka/Tempo(ch7.2/ch8) 완비 후 이 `syncPolicy`를 되돌려야 함 |
 | 2026-09-21 | ch6.3: `kubectl argo rollouts` CLI 플러그인이 로컬에 설치되어 있지 않아 가이드의 `promote --full` 명령 사용 불가 (`unknown command "argo" for "kubectl"`) | 대안: `kubectl scale replicaset <끊긴-old-rs> --replicas=0` 후 `kubectl delete rs <old-rs>`로 동일 효과(구 ReplicaSet 제거로 컨트롤러가 신규 RS를 stable로 확정). 위 root-app selfHeal 복원 사건으로 생긴 깨진(api-pool, Pending) ReplicaSet 정리에 사용 |
 | 2026-09-21 | ch6.3: root-app의 hard refresh(selfHeal 복원 유발 시점) 도중 `k8s/smb/healthcheck-cronjob.yaml`도 함께 동기화되어, ops-pool 등 미존재 노드를 대상으로 하는 CronJob Pod가 5분마다 Pending 상태로 쌓임(`notiflex-healthcheck-*`) | ch6.3 작업 범위 밖이라 정리하지 않음. 해롭지 않은 Pending 상태이며 ch7.2에서 노드풀 생성 시 자연 해소 예정 — 방치 시 누적되는 Pending Pod 수는 계속 관찰 필요 |
+| 2026-09-22 | ch8.1: `k8s/kafka/kafka-cluster.yaml`(원본 가이드 기준, Kafka `4.1.0`) 적용 시 `Kafka` CR이 `NotReady`로 멈춤 — `describe kafka`에서 `Unsupported Kafka.spec.kafka.version: 4.1.0. Supported versions are: [4.2.0, 4.2.1, 4.3.0, 4.3.1]` (Strimzi 1.2.0, 원본 가이드가 가정한 0.51보다 훨씨 신버전이라 지원 Kafka 버전대가 위로 이동) | `kafka.spec.kafka.version`을 `4.2.0`으로 수정(가장 근접한 지원 버전) 후 재적용하니 즉시 Ready. `app/main.go`의 sarama `cfg.Version`도 `V4_1_0_0`→`V4_2_0_0`으로 맞춰야 함(sarama v1.48.0의 `MaxVersion`이 `V4_2_0_0`이라 `V4_3_x` 상수는 아직 없음 — `go doc github.com/IBM/sarama.V4_3_0_0`으로 부재 확인). 커밋 40af37a/CI `sha-40af37a`로 배포 후 `/id`→Producer 전송→두 Pod Consumer 모두 수신 로그 확인. **향후 챕터 재구축 시 교훈**: Strimzi/Kafka처럼 버전 호환 매트릭스가 빠르게 바뀌는 컴포넌트는 가이드의 고정 버전을 그대로 쓰지 말고 `describe`/에러 메시지로 현재 지원 버전을 먼저 확인할 것 |
