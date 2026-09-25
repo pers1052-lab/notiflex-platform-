@@ -23,6 +23,22 @@ kubectl config rename-context \
 kubectl --context gke-sysnet4admin_book_gitaiops get nodes
 ```
 
+### 시크릿 설정
+
+Grafana admin 계정은 git에 평문으로 저장하지 않고, `kubectl create secret`으로 클러스터에 직접 생성한다 (`helm-values/kube-prometheus.yaml`의 `grafana.admin.existingSecret`이 참조):
+
+```bash
+kubectl --context gke-sysnet4admin_book_gitaiops create namespace monitoring \
+  --dry-run=client -o yaml | kubectl --context gke-sysnet4admin_book_gitaiops apply -f -
+
+kubectl --context gke-sysnet4admin_book_gitaiops create secret generic grafana-admin-credentials \
+  -n monitoring \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password="$(openssl rand -base64 24)"
+```
+
+Valkey 비밀번호는 ADR-009에 따라 GKE Secret Manager CSI + Workload Identity로 관리한다 (`k8s/*/secret-provider.yaml`). 클러스터에 K8s Secret을 별도로 만들 필요가 없으며, GCP Secret Manager의 `valkey-password` 시크릿 값만 관리하면 된다.
+
 ### 주요 리소스 확인
 
 ```bash
