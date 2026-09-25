@@ -27,6 +27,22 @@ kubectl --context gke-sysnet4admin_book_gitaiops get nodes
 
 > ⚠️ **모든 kubectl 명령에 `--context gke-sysnet4admin_book_gitaiops`를 반드시 지정한다.** 다른 클러스터에 실수로 명령이 나가는 걸 막기 위함.
 
+### 시크릿 설정
+
+Grafana admin 계정은 git에 평문으로 저장하지 않고, `kubectl create secret`으로 클러스터에 직접 생성한다 (`helm-values/kube-prometheus.yaml`의 `grafana.admin.existingSecret`이 참조):
+
+```bash
+kubectl --context gke-sysnet4admin_book_gitaiops create namespace monitoring \
+  --dry-run=client -o yaml | kubectl --context gke-sysnet4admin_book_gitaiops apply -f -
+
+kubectl --context gke-sysnet4admin_book_gitaiops create secret generic grafana-admin-credentials \
+  -n monitoring \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password="$(openssl rand -base64 24)"
+```
+
+Valkey 비밀번호는 ADR-009에 따라 GKE Secret Manager CSI + Workload Identity로 관리한다 (`k8s/*/secret-provider.yaml`). 클러스터에 K8s Secret을 별도로 만들 필요가 없으며, GCP Secret Manager의 `valkey-password` 시크릿 값만 관리하면 된다.
+
 ## 클러스터 실제 상태
 
 ### 노드풀 (5개 노드, 역할별 전용 배치)
@@ -91,7 +107,7 @@ kubectl --context gke-sysnet4admin_book_gitaiops port-forward svc/argocd-server 
 ```bash
 kubectl --context gke-sysnet4admin_book_gitaiops port-forward svc/kube-prometheus-grafana -n monitoring 3000:80
 ```
-→ http://localhost:3000 (ID: `admin` / PW: `admin`)
+→ http://localhost:3000 (ID/PW: 위 "시크릿 설정"에서 생성한 `grafana-admin-credentials` 값 — 더 이상 고정된 `admin`/`admin`이 아니다)
 
 데이터소스별 용도:
 - **Prometheus**: 메트릭. Explore에서 PromQL로 `kube_cronjob_info`, `kube_pod_container_status_restarts_total` 등 조회
